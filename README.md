@@ -63,14 +63,14 @@ pnpm run deploy
 ```
 
 Note your Worker URL — it will look like:
-`https://school-lunch-skill.<your-subdomain>.workers.dev`
+`https://school-menu-alexa.<your-subdomain>.workers.dev`
 
 ### 4. Test the menu endpoint
 
 Before touching Alexa, verify the Worker is fetching menus correctly:
 
 ```bash
-curl https://school-lunch-skill.<your-subdomain>.workers.dev/menu
+curl https://school-menu-alexa.<your-subdomain>.workers.dev/menu
 ```
 
 You should see a JSON object with today's menu categories and items.
@@ -87,7 +87,7 @@ You should see a JSON object with today's menu categories and items.
    - _what's on the lunch menu_
 4. Under **Endpoint**, select **HTTPS** and enter your Worker URL + `/alexa`:
    ```
-   https://school-lunch-skill.<your-subdomain>.workers.dev/alexa
+   https://school-menu-alexa.<your-subdomain>.workers.dev/alexa
    ```
    Set the SSL certificate type to **"My development endpoint is a sub-domain of a domain that has a wildcard certificate from a certificate authority"**
 5. Save and build the model

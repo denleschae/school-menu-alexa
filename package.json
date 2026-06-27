@@ -1,5 +1,5 @@
 {
-  "name": "school-lunch-skill",
+  "name": "school-menu-alexa",
   "version": "1.0.0",
   "private": true,
   "scripts": {
@@ -9,7 +9,11 @@
   },
   "pnpm": {
     "allowedDeprecatedVersions": {},
-    "onlyBuiltDependencies": ["esbuild", "sharp", "workerd"]
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "sharp",
+      "workerd"
+    ]
   },
   "devDependencies": {
     "wrangler": "^4.0.0",

@@ -43,7 +43,7 @@ SchoolCafe API is the source of truth, fetched live on each request.
 ## Project Structure
 
 ```
-school-lunch-skill/
+school-menu-alexa/
 ├── src/
 │   └── index.ts          # Main Worker entry point
 ├── wrangler.toml          # Cloudflare Worker config
@@ -237,7 +237,7 @@ const CONFIG = {
 ## wrangler.toml
 
 ```toml
-name = "school-lunch-skill"
+name = "school-menu-alexa"
 main = "src/index.ts"
 compatibility_date = "2025-01-01"
 
@@ -259,8 +259,8 @@ wrangler secret put ALEXA_SKILL_ID
 ### Install & run locally
 
 ```bash
-npm create cloudflare@latest school-lunch-skill -- --type worker
-cd school-lunch-skill
+npm create cloudflare@latest school-menu-alexa -- --type worker
+cd school-menu-alexa
 wrangler dev
 ```
 
