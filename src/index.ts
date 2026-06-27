@@ -244,6 +244,26 @@ export default {
       return handleMenuDebug(env, date);
     }
 
+    if (request.method === "GET" && url.pathname === "/siri") {
+      // Optional ?date=YYYY-MM-DD so Shortcuts can pass tomorrow's date etc.
+      const timezone = env.TIMEZONE ?? "America/Chicago";
+      const todayStr = getTodayString(timezone);
+      const dateParam = url.searchParams.get("date");
+      const dateStr =
+        dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam) ? dateParam : todayStr;
+      const dayLabel = getDayLabel(dateStr, todayStr);
+      try {
+        const menu = await fetchMenu(dateStr);
+        const speech = buildSpeech(menu, dayLabel);
+        return new Response(speech, { headers: { "Content-Type": "text/plain" } });
+      } catch {
+        return new Response(
+          "Sorry, I had trouble getting the lunch menu right now.",
+          { headers: { "Content-Type": "text/plain" } }
+        );
+      }
+    }
+
     return new Response("Not Found", { status: 404 });
   },
 } satisfies ExportedHandler<Env>;
