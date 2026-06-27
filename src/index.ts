@@ -123,8 +123,9 @@ function buildSpeech(menu: MenuResponse, dayLabel: string): string {
       primary.push(listItems(items));
     } else {
       // Strip pricing info like "(A LA CARTE $2.50)" for cleaner speech
-      const label = category.replace(/\(.*?\)/g, "").trim().toLowerCase();
-      secondary.push(`the ${label} has ${listItems(items)}`);
+      const label = category.replace(/\(.*?\)/g, "").trim();
+      const labelLower = label.charAt(0).toLowerCase() + label.slice(1).toLowerCase();
+      secondary.push(`the ${labelLower} has ${listItems(items)}`);
     }
   }
 
@@ -135,7 +136,8 @@ function buildSpeech(menu: MenuResponse, dayLabel: string): string {
   }
 
   if (secondary.length) {
-    parts.push(secondary.join(", and ") + ".");
+    const sentence = secondary.join(", and ") + ".";
+    parts.push(sentence.charAt(0).toUpperCase() + sentence.slice(1));
   }
 
   if (!parts.length) {
