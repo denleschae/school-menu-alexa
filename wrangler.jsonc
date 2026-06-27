@@ -1,0 +1,14 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "school-lunch-skill",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-06-01",
+
+  "vars": {
+    "TIMEZONE": "America/Chicago"
+  },
+
+  "observability": {
+    "enabled": true
+  }
+}
