@@ -28,7 +28,10 @@ interface AlexaRequest {
   version: string;
   request: {
     type: string;
-    intent?: { name: string };
+    intent?: {
+      name: string;
+      slots?: Record<string, { value?: string }>;
+    };
   };
 }
 
@@ -42,18 +45,43 @@ interface AlexaSpeechResponse {
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
-function getServingDate(date: Date, timeZone: string): string {
-  const local = date.toLocaleDateString("en-US", {
-    timeZone,
+// Returns today's date in the given timezone as "YYYY-MM-DD"
+function getTodayString(timezone: string): string {
+  const now = new Date();
+  const local = now.toLocaleDateString("en-US", {
+    timeZone: timezone,
+    year: "numeric",
     month: "2-digit",
     day: "2-digit",
-    year: "numeric",
   }); // "06/27/2026"
-  return local.replace(/\//g, "%2F");
+  const [month, day, year] = local.split("/");
+  return `${year}-${month}-${day}`;
 }
 
-async function fetchMenu(date: Date, timezone: string): Promise<MenuResponse> {
-  const servingDate = getServingDate(date, timezone);
+// Converts "YYYY-MM-DD" to "M%2FD%2FYYYY" for the SchoolCafe API (no zero-padding on month/day)
+function formatServingDate(dateStr: string): string {
+  const [year, month, day] = dateStr.split("-");
+  return `${parseInt(month!, 10)}%2F${parseInt(day!, 10)}%2F${year}`;
+}
+
+// Returns a natural label: "today", "tomorrow", or the weekday name ("Monday")
+function getDayLabel(dateStr: string, todayStr: string): string {
+  if (dateStr === todayStr) return "today";
+
+  // Compare as UTC noon to avoid DST/timezone shifting the day
+  const todayMs = new Date(todayStr + "T12:00:00Z").getTime();
+  const dateMs = new Date(dateStr + "T12:00:00Z").getTime();
+  const dayDiff = Math.round((dateMs - todayMs) / (1000 * 60 * 60 * 24));
+
+  if (dayDiff === 1) return "tomorrow";
+
+  const [year, month, day] = dateStr.split("-").map(Number);
+  const d = new Date(Date.UTC(year!, month! - 1, day!, 12));
+  return d.toLocaleDateString("en-US", { weekday: "long", timeZone: "UTC" });
+}
+
+async function fetchMenu(dateStr: string): Promise<MenuResponse> {
+  const servingDate = formatServingDate(dateStr);
   const url =
     `${CONFIG.SCHOOLCAFE_BASE_URL}/api/CalendarView/GetDailyMenuitems` +
     `?SchoolId=${CONFIG.SCHOOL_ID}` +
@@ -75,11 +103,11 @@ function listItems(items: MenuItem[]): string {
   return items.map((i) => i.MenuItemDescription).join(", ");
 }
 
-function buildSpeech(menu: MenuResponse, dayName: string): string {
+function buildSpeech(menu: MenuResponse, dayLabel: string): string {
   const entries = Object.entries(menu);
   if (entries.length === 0) {
     return (
-      `I couldn't find a lunch menu for ${dayName}. ` +
+      `I couldn't find a lunch menu for ${dayLabel}. ` +
       "It might be a holiday or a no-school day."
     );
   }
@@ -94,7 +122,7 @@ function buildSpeech(menu: MenuResponse, dayName: string): string {
     if (categoryMatches(category, CONFIG.PRIMARY_CATEGORY_KEYWORDS)) {
       primary.push(listItems(items));
     } else {
-      // Use a friendlier label: strip pricing info like "(A LA CARTE $2.50)"
+      // Strip pricing info like "(A LA CARTE $2.50)" for cleaner speech
       const label = category.replace(/\(.*?\)/g, "").trim().toLowerCase();
       secondary.push(`the ${label} has ${listItems(items)}`);
     }
@@ -103,7 +131,7 @@ function buildSpeech(menu: MenuResponse, dayName: string): string {
   const parts: string[] = [];
 
   if (primary.length) {
-    parts.push(`${dayName}'s school lunch main entrées are ${primary.join(" and ")}.`);
+    parts.push(`${dayLabel}'s school lunch main entrées are ${primary.join(" and ")}.`);
   }
 
   if (secondary.length) {
@@ -112,7 +140,7 @@ function buildSpeech(menu: MenuResponse, dayName: string): string {
 
   if (!parts.length) {
     return (
-      `I couldn't find a lunch menu for ${dayName}. ` +
+      `I couldn't find a lunch menu for ${dayLabel}. ` +
       "It might be a holiday or a no-school day."
     );
   }
@@ -146,17 +174,32 @@ async function handleAlexaRequest(req: Request, env: Env): Promise<Response> {
     return Response.json(alexaResponse("Goodbye!"));
   }
 
-  if (type === "LaunchRequest" || (type === "IntentRequest" && body.request.intent?.name === "GetLunchMenuIntent")) {
-    const now = new Date();
+  if (
+    type === "LaunchRequest" ||
+    (type === "IntentRequest" && body.request.intent?.name === "GetLunchMenuIntent")
+  ) {
     const timezone = env.TIMEZONE ?? "America/Chicago";
-    const dayName = now.toLocaleDateString("en-US", {
-      timeZone: timezone,
-      weekday: "long",
-    });
+    const todayStr = getTodayString(timezone);
+
+    // Extract date slot from Alexa; fall back to today
+    const slotValue = body.request.intent?.slots?.["date"]?.value;
+
+    // AMAZON.DATE can return week ranges ("2026-W26") or months ("2026-06") for
+    // vague phrases — we only handle specific dates
+    if (slotValue && !/^\d{4}-\d{2}-\d{2}$/.test(slotValue)) {
+      return Response.json(
+        alexaResponse(
+          "I can only look up the menu for a specific day. Try asking for today, tomorrow, or a day like Monday."
+        )
+      );
+    }
+
+    const dateStr = slotValue ?? todayStr;
+    const dayLabel = getDayLabel(dateStr, todayStr);
 
     try {
-      const menu = await fetchMenu(now, timezone);
-      const speech = buildSpeech(menu, dayName);
+      const menu = await fetchMenu(dateStr);
+      const speech = buildSpeech(menu, dayLabel);
       return Response.json(alexaResponse(speech));
     } catch {
       return Response.json(
@@ -172,12 +215,12 @@ async function handleAlexaRequest(req: Request, env: Env): Promise<Response> {
   );
 }
 
-async function handleMenuDebug(env: Env): Promise<Response> {
-  const now = new Date();
+async function handleMenuDebug(env: Env, dateStr?: string): Promise<Response> {
   const timezone = env.TIMEZONE ?? "America/Chicago";
+  const target = dateStr ?? getTodayString(timezone);
   try {
-    const menu = await fetchMenu(now, timezone);
-    return Response.json(menu);
+    const menu = await fetchMenu(target);
+    return Response.json({ date: target, menu });
   } catch (err) {
     return Response.json({ error: String(err) }, { status: 502 });
   }
@@ -194,7 +237,9 @@ export default {
     }
 
     if (request.method === "GET" && url.pathname === "/menu") {
-      return handleMenuDebug(env);
+      // Optional ?date=YYYY-MM-DD for testing historical dates
+      const date = url.searchParams.get("date") ?? undefined;
+      return handleMenuDebug(env, date);
     }
 
     return new Response("Not Found", { status: 404 });
